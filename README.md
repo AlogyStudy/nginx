@@ -1,2 +1,2 @@
 # nginx
-ngxix 学习
+nginx 学习
