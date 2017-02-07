@@ -291,8 +291,76 @@ $http_x_forwarded_for // 被转发的请求原始IP (在经过代理时，代理
 [百度robots](https://www.baidu.com/robots.txt)
 蜘蛛协议.
 
+Nginx允许针对不同的server做不同的Log(有的web服务器不支持，如：lighttp)
 
-Nginx允许针对不同的server做不同的log
+```
+access_log logs/z.com.access.log main; // 配置单独的log日志
+```
+
+# 定时任务
+
+> shell 脚本
+
+shell 脚本注意空格
+
+变量声明
+```
+a // 定义
+$a // 使用
+```
+
+输出执行返回结果
+```
+echo `date -d yesterday %Y%m%d` // 第一种: ``
+echo $(date -d yesterday %Y%m%d) // 第二种: $()
+```
+
+日志切割
+```
+#!/bin/bash
+LOGPATH=/usr/local/nginx/logx/z.com.access.log
+BASEPATH=/data
+
+bak=$BASEPATH/$(date -d yesterday +%Y%m%d%H%M).zcom.access.log
+
+#echo $bak
+
+mv $LOGPATH $bak
+touch $LOGPATH
+
+kill -USR1 `cat /usr/local/nginx/logs/nginx.pid`
+```
+
+# Location
+
+`location` 有定位的意思，根据Uri来进行不同定位
+
+在虚拟主机的配置中，是必不可少的location可以把网站的不同部分，定位到不同的处理方式上。
+比如。碰到.php，如何调用PHP解释器，这时需要location。
+
+location 的语法
+```
+location [=|~|~*|^~] patt {
+}
+```
+中括号可以不写任何参数，此时称之为一般匹配
+也可以写参数
+因此，大类型可以分为3种：
+1. location = patt {} [精准匹配]
+2. location patt {} [一般匹配]
+3. location ~ patt {} [正则匹配]
+
+
+如何发挥作用?
+
+首先看是否有精准匹配，如果有，则停止匹配过程.
+```
+location = patt {
+    config A
+}
+```
+如果 $uri == patt, 匹配成功,使用 `config A`
+
 
 
 
