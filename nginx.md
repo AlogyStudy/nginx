@@ -452,3 +452,169 @@ location 的匹配过程：
 * 普通匹配顺序无所谓，是按照匹配长短来确定的.
 * 正则匹配是按照顺序来匹配.
 
+
+# rewrite
+
+rewrite(重写)语法详解
+
+重写的规则可以放在`location`或者`service`中.
+
+常用的命令
+1. if 空格 (条件) {} # 设定条件，再进行重写
+2. set # 设置变量
+3. return # 返回状态码
+4. break # 跳出rewrite
+5. rewrite # 重写
+
+
+**if 语法**
+
+```
+if 空格 (条件) { // 空格不允许少
+    重写默认
+}
+```
+
+条件写法：
+1. `=`来判断相等，用于字符串比较
+2. `~`用正则来匹配(区分大小写) , `~*`用来正则匹配(不区分大小写)
+3. -f-d-e 来判断是否为文件，为目录，是否存在.
+
+**相等**
+```
+location / {
+  if ($remote_addr = 192.168.1.12) {
+      return 403;
+  }
+  root html;
+  index index.html index.htm;
+}
+```
+
+**正则**
+```
+location / {
+  if ($http_user_agent ~* chrome) {
+      rewrite ^.*$ /chrome.html;
+      #  不加 break; 会导致循环重定向， 页面现象， 500 内部服务器错误
+      break;
+  }
+  root html;
+  index index.html index.htm;
+}
+```
+
+**-f-d-e**
+除了 `nginx.conf`配置文件中可以看到变量
+在文件`conf/fastcig.conf`查看全部nginx可以引用的变量.
+
+`$fastcgi_script_name` 当前访问的uri.
+例如：`/abc.html`
+
+```
+location {
+    if (!-e $document_root$fastcgi_script_name) {
+      rewrite ^.*$ /404.html;
+      break;
+    }
+    root html;
+    index index.html index.htm;
+}
+```
+
+以`http://xxx.com/abcds.html`,不存在的页面为例.
+注意：此处需要加`break`，因为观察访问日志，日志中显示的访问路径，依然是地址栏输入的uri.(GET /abcds.html HTTP/1.1)。
+提示：服务器内部的`rewrite`和302跳转不一样。跳转的话是URL变化，重新发送请求404.html,而内部rewrite，仅仅是重新读取404.html的内容，上下文没有变化,就是 `fastcgi_script_name` 仍然是 `/abcds.html`,因此会循环重定向。
+
+
+**set**
+set是设置变量使用，可以达到多条件判断时做标记使用。
+达到apache下的`rewrite_condition`的效果。
+
+
+判断chrome浏览器，并且不用break。
+```
+if ($http_user_agent ~* chrome) {
+  set $ischrome 1;
+}
+
+if ($fastcgi_script_name = chrome.html) {
+  set $ischrome 0;
+}
+
+if ($ischrome 1) {
+ rewrite ^.*$ chrome.html;
+}
+```
+
+# 编译PHP
+
+安装mysql：`yum install mysql mysql-devel`
+
+nginx+php的编译.
+apache一般是把php当作自己的一个模块来启动的，而nginx则是把http请求的变量(如get，user_agent等)转发给php进程，即PHP独立进程，与nginx进行通讯.称之为`fastcgi`运行方式.
+因此，为此apache所编译的PHP，是不能用于nginx的，需要重新编译。
+
+注意，编译的PHP有如下功能：
+1. 链接mysql
+2. gd库
+3. ttf字体
+4. fpm(fastcgi)方式运行.
+
+
+前期安装
+```
+> yum install gd
+> yum install freetype
+> yum install gd-devel
+```
+配置与安装
+```
+./configure --prefix=/usr/local/fastphp \
+--with-mysql=mysqlnd \
+--enable-mysqlnd \
+--with-gd \
+--enable-gd-native-ttf \
+--enable-gd-jis-conv \
+--enable-fpm
+
+make && make install
+```
+
+编译完毕后：
+```
+> cp /usr/local/src/php-5.4.19/php.ini-development ./lib/php.ini
+
+> cd etc/
+> cp etc/php.fpm.conf.default etc/php-fpm.conf
+```
+
+运行：
+```
+> ./sbin/php-fpm
+```
+
+nginx与PHP是相互独立的，PHP以9000端口作为进程独立运行。nginx接收到请求，把请求转给PHP进程
+配置核心：把请求的信息转发给9000端口的PHP进程，让PHP进程处理指定目录下的PHP文件.
+
+修改nginx配置文件:`conf/nginx.conf`
+```
+location ~ \.php$ {
+    root           html;
+    fastcgi_pass   127.0.0.1:9000; # 发送到9000端口进程
+    fastcgi_index  index.php;
+    fastcgi_param  SCRIPT_FILENAME  $document_root$fastcgi_script_name;  # 寻找PHP目录地址
+    include        fastcgi_params;
+}
+```
+
+解释
+1. 碰到PHP文件
+2. 把根目录定位到html
+3. 把请求上下文转交给9000端口的PHP进程。
+4. 并告知PHP进程，当前脚本是`$document_root$fastcgi_script_name`(注：PHP会去寻找当前脚本位置，所以脚本位置要指对)
+5. PHP处理之后，返回给nginx服务器.
+
+ 
+
+
