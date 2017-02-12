@@ -598,6 +598,7 @@ nginx与PHP是相互独立的，PHP以9000端口作为进程独立运行。nginx
 配置核心：把请求的信息转发给9000端口的PHP进程，让PHP进程处理指定目录下的PHP文件.
 
 修改nginx配置文件:`conf/nginx.conf`
+
 ```
 location ~ \.php$ {
     root           html;
@@ -608,7 +609,8 @@ location ~ \.php$ {
 }
 ```
 
-解释
+解释:
+
 1. 碰到PHP文件
 2. 把根目录定位到html
 3. 把请求上下文转交给9000端口的PHP进程。
