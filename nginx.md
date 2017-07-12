@@ -555,7 +555,8 @@ nginx+php的编译.
 apache一般是把php当作自己的一个模块来启动的，而nginx则是把http请求的变量(如get，user_agent等)转发给php进程，即PHP独立进程，与nginx进行通讯.称之为`fastcgi`运行方式.
 因此，为此apache所编译的PHP，是不能用于nginx的，需要重新编译。
 
-注意，编译的PHP有如下功能：
+编译的PHP有如下功能：
+
 1. 链接mysql
 2. gd库
 3. ttf字体
