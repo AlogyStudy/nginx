@@ -619,5 +619,35 @@ location ~ \.php$ {
 5. PHP处理之后，返回给nginx服务器.
 
  
+# url重写
+ 
+注意：用url重写，正则里如果有`{}`，整个正则需要使用`""`包起来
+
+静态文件地址重写到动态目录地址
+例如：`goods-10.html` 重写到 `goods.php?id=10`
+```
+location /zf {
+    rewrite "goods-(\d{1,7}).html" /zf/goods.php?id=$1;
+}
+```
+
+正则表达式支持`后向引用`
+
+```
+location /zf {
+	index index.php;
+	rewrite goods-([\d]+)\.html$ /zf/goods.php?id=$1;
+	rewrite article-([\d]+)\.html$ /zf/article.php?id=$1;
+	rewrite category-(\d+)-b(\d+)\.html /zf/category.php?=$1&barnd=$2;
+}
+```
+
+通过两次路由对比写出正则
+```
+category.php?id=3&barnd=1&price_min=200&price_max=1700&filter_attr=167.229.202.199
+category-3-b2-min200-max700-attr167.229.202.199.html
+
+category-(\d+)-b(\d+)-min(\d+)-max(\d+)-attr([\d\.]+)\.html category.php?id=$1&barnd=$2&price_min=$3&$price_max=$4&filter_attr=$5;
+```
 
 
