@@ -649,5 +649,53 @@ category-3-b2-min200-max700-attr167.229.202.199.html
 
 category-(\d+)-b(\d+)-min(\d+)-max(\d+)-attr([\d\.]+)\.html category.php?id=$1&barnd=$2&price_min=$3&$price_max=$4&filter_attr=$5;
 ```
+-----
+```
+/category.php?id=3&barnd=2&price_min=0&price_max=0&page=2&sort=goods_id&order=DESC
+
+/category-3-b0-min0-max9-attr0-1-goods_id-DESC.html
+
+category-(\d+)-b(\d+)-min(\d+)-max(\d+)-attr([\d\.]+)-(\d+)-(\w+)-(\w+)\.html caetgory.php?id=$1&barnd=$2&price_min=$3&price_max=$4&filter_attr=$5&page=$6&sort=$7&order=$8.html
+```
+
+# gzip压缩
+
+网页内容的压缩编码与传输速度优化
+
+响应头中有：
+```
+Content-Encoding: gzip
+```
+
+原理：
+浏览器-->请求-->声明可以接受gzip压缩或default压缩或compress或sdch压缩（sdch是google倡导的一种压缩方式，目前支持的服务器尚不多）
+从http协议角度看，请求头，声明acceopt->encoding:gzip default sdch (是压缩算法)
+服务器-->回应-->把内容gzip方式压缩-->发送浏览器 --> 接收gzip压缩内容（浏览器接收之后是压缩后的二进制文件）--> 解码gzip --> 浏览
 
 
+注意：图片/mp3这样的二进制文件，不必压缩，因为压缩比较小，比如100->80字节，而且压缩也是压缩也是耗费CPU资源
+
+
+> gzip常用参数
+
+```
+gzip on|off # 是否开启gizp
+gzip_buffers 32 4K| 16 8K # 缓冲（压缩在内存中缓冲几块?每块多大?）
+gzip_comp_level[1-9] # 推荐 6 压缩级别（级别越高，压缩越小，越浪费CPU计算资源）
+gzip_disable # 正则匹配 #UA 什么样的Uri不进行gzip
+gzip_min_length 200 # 开始压缩的最小长度
+gzip_http_version 1.0|1.1 # 开始压缩的http协议的版本（如选1.1则满足1.1的才压缩）
+gzip_proxied  # 设置请求着代理服务器如何缓存内容
+gzip_types text/plain  appliction/xml #对哪些类型的文件用压缩 如txt,xml,html,css
+gzip_vary on|off #是否传输gzip压缩标志
+```    
+
+写在server段上
+
+```
+gzip on;
+gzip_buffers 32 4K;
+gzip_com_level 6;
+gzip_min_length 200;
+gzip_types text/css text/xml application/x-javascript;
+```
