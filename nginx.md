@@ -672,10 +672,6 @@ Content-Encoding: gzip
 从http协议角度看，请求头，声明acceopt->encoding:gzip default sdch (是压缩算法)
 服务器-->回应-->把内容gzip方式压缩-->发送浏览器 --> 接收gzip压缩内容（浏览器接收之后是压缩后的二进制文件）--> 解码gzip --> 浏览
 
-
-注意：图片/mp3这样的二进制文件，不必压缩，因为压缩比较小，比如100->80字节，而且压缩也是压缩也是耗费CPU资源
-
-
 > gzip常用参数
 
 ```
@@ -693,9 +689,61 @@ gzip_vary on|off #是否传输gzip压缩标志
 写在server段上
 
 ```
-gzip on;
-gzip_buffers 32 4K;
-gzip_com_level 6;
-gzip_min_length 200;
-gzip_types text/css text/xml application/x-javascript;
+server {
+    gzip on;
+    gzip_buffers 32 4K;
+    gzip_comp_level 6;
+    gzip_min_length 200;
+    gzip_types text/css text/xml application/x-javascript;
+}
 ```
+
+
+注意：图片/mp3等的二进制文件，不必压缩，因为压缩比较小，比如100->80字节，而且压缩也是压缩也是耗费CPU资源
+
+
+# expires缓存
+
+expires缓存提升网站负载
+
+nginx缓存设置，提高网站性能。
+对于网站的图片，尤其是新闻站，图片一旦发布，改动的可能性非常小，用户访问一次之后，图片缓存到浏览器端，且时间比较长的缓存。使用到`nginx的expires`
+
+nginx中设置过期时间，在`location`段，或`if`中写：
+```
+expires 30s;
+expires 30m; // 2分钟过期
+expires 2h; // 2小时过期
+expires 30d; // 30天过期
+```
+-----
+```
+location ~* .\(git|jpg|jpeg|png) {
+    root html;
+    expires 1d; # 1天
+}
+```
+
+注意：服务器的日期需要准确，如果服务器的日期和实际日期，可能导致缓存失效。
+
+304也是一种缓存手段，原理是：服务器响应文件内容，同时响应etag标签（内容签名）和last_modified_since 2个标签值，浏览器下次请求时，浏览器要发送这两个头信息标签，服务器检测文件有没有发生变化，没有变化的话，返回头信息（etag和last_modified_since）浏览器知道内容无改变，于是直接调用本地缓存。
+
+这过程中，也请求了服务器，但是传输内容极少，对于变化周期较短，如静态html，css。
+
+
+# 反向代理
+
+nginx反向代理服务器
+
+使用nginx做反向代理和负载均衡支持两个用法：
+1. proxy
+2. upstream
+
+nginx不自己处理php的相关请求，而是把php的相关转发给apache处理（php不让nginx跑）
+
+
+![](./_image/2017-02-08-23-35-478.png)
+
+这种形式，就是`动静分离`，更为严谨的说法是反向代理
+
+
