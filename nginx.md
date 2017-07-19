@@ -747,3 +747,68 @@ nginx不自己处理php的相关请求，而是把php的相关转发给apache处
 这种形式，就是`动静分离`，更为严谨的说法是反向代理
 
 
+注释掉nginx解析php的配置，通过代理形式转到apache解析php，（要保证apache能够支持php）
+```
+location ~ \.php$ {
+    proxy_prss http://102.168.1.10:8000;
+}
+```
+
+nginx服务器通过中间的代理，交代给谁完成任务，或者交代给几个人做，都是可行的。
+把任务分配给多台机器，就是负载均衡。 
+
+
+
+# 负载均衡
+
+反向代理后端如果有多台服务器，自然可形成负载均衡。
+但是`proxy_pass` 如何指向多态服务器？
+把多台服务器用`up_stream`指定绑定在一起并起一个组名，然后`proxy_pass`指向该组.
+配置服务器：
+```
+server {
+    listen 81;
+    server_name localhost;
+    root /var/www/image;
+}
+server {
+    listen 82;
+    server_name localhost;
+    root /var/www/image;
+}
+```
+增加组：
+```
+#upstream 组名字 {
+#    server ip wight=1(权重) fail_timeout=3(连接不上的时间) max_fails=2(连接不上的次数)
+#}
+upstream imageserver {
+    server 192.168.1.100:81 weight=1 fail_timeout=3 max_fails=2;
+    server 192.168.1.100:82 fail_timeout=3 max_fails=2;
+}
+```
+然后修改反向代理配置代码:
+```
+location ~* \.(jpg|jpge|git|png) {
+    proxy_pass http://imageserver;
+}
+```
+
+默认的负载均衡的算法，就是正对后端服务器的顺序，逐个请求。也有其它的负载均衡算法，如一致性哈希，需要安装第三方模块`ngx_http_upstream_consistent_hash`。
+
+
+问题：
+反向代理导致了后端服务器的IP，为前端服务器的IP，而不是客户真正的IP
+解决方式：
+使用x-forwar
+为了不改变用户的IP，需要通过变量存储IP带过去，一般约定俗成是通过头信息是：
+```
+proxy_set_header X-Forwarded-For $remote_addr;
+```
+-----
+location ~* \.(jpg|jpge|git|png) {
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_pass http://imageserver;
+}
+
+
