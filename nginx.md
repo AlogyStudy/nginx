@@ -812,3 +812,10 @@ location ~* \.(jpg|jpge|git|png) {
 }
 
 
+# 连接memcached
+
+编译或安装memcached
+```
+sudo apt-get install memcached
+```
+
