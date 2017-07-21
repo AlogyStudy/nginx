@@ -818,4 +818,21 @@ location ~* \.(jpg|jpge|git|png) {
 ```
 sudo apt-get install memcached
 ```
+手动编译memcached
+选择php7对应的memcached
+```
+git clone https://github.com/php-memcached-dev/php-memcached.git
+cd php-memcached
+git checkout php7
+```
+执行phpize生成configure
 
+执行生成配置：
+```
+./configure  --disable-memcached-sasl --with-libmemcached-dir=/usr/local/sxin/tools/libmemcached
+make && make install
+```
+安装好之后提示的信息：
+```
+安装好后：Installing shared extensions:     /usr/local/sxin/php7/lib/php/extensions/no-debug-zts-20151012/
+```
