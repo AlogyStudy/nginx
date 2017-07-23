@@ -758,7 +758,6 @@ nginx服务器通过中间的代理，交代给谁完成任务，或者交代给
 把任务分配给多台机器，就是负载均衡。 
 
 
-
 # 负载均衡
 
 反向代理后端如果有多台服务器，自然可形成负载均衡。
@@ -811,28 +810,268 @@ location ~* \.(jpg|jpge|git|png) {
     proxy_pass http://imageserver;
 }
 
-
 # 连接memcached
 
-编译或安装memcached
-```
-sudo apt-get install memcached
-```
-手动编译memcached
-选择php7对应的memcached
-```
-git clone https://github.com/php-memcached-dev/php-memcached.git
-cd php-memcached
-git checkout php7
-```
-执行phpize生成configure
 
-执行生成配置：
+> 编译或安装memcached
+
 ```
-./configure  --disable-memcached-sasl --with-libmemcached-dir=/usr/local/sxin/tools/libmemcached
+git clone https://github.com/memcached/memcached.git
+cd memcached
+sudo apt-get install autotools-dev
+sudo apt-get install automake
+./autogen.sh // 生成configure文件
+./configure --with-php-config=/etc/php/7.1/fpm // 配置指定php的配置文件
 make && make install
 ```
+
 安装好之后提示的信息：
 ```
 安装好后：Installing shared extensions:     /usr/local/sxin/php7/lib/php/extensions/no-debug-zts-20151012/
 ```
+修改`php.ini`配置文件
+```
+entension=/usr/local/sxin/php7/lib/php/extensions/no-debug-zts-20170722/memcached.so
+```
+删除进程，重启php
+```
+pkill -9 php
+```
+
+测试是否成功：
+```
+<?php
+phpinfo();
+?>
+```
+在phpinfo中是否输出memcache模块
+
+
+安装过程中出现的错误：
+
+
+![](./_image/2565828848-5974246b75359_articlex.png)
+
+
+方法1：
+需要安装`libevent`，可能会报无法安装，使用wget方式安装
+```
+sudo apt-get install libevent libevent-deve
+```
+![](./_image/2024981432-597425cdd3632_articlex.png)
+
+方法2：
+```
+wget http://monkey.org/~provos/libevent-1.4.14b-stable.tar.gz
+tar -zxvf libevent-1.4.14b-stable.tar.gz 
+cd libevent-1.4.14b-stable
+./configure --prefix=/usr  
+make && make install
+```
+
+> nginx直连memcached
+
+原理：
+
+![](./_image/1114550157-5973467c7f612_articlex.png)
+
+- nginx需要设定key，去查memcached
+- 如果不存在需要回调php，并把key值传给php    
+
+nginx请求memcached时，用什么做key？
+一般用 uri arg做key， 如`abc.php?id=2`
+
+```
+location / {
+	set $memcached_key "$uri";
+	memcacehd_pass 127.0.0.1:11211;
+	error_page 404 /callback.php
+}
+```
+
+
+问题：
+如果多台memcaehed，某个key去请求那个memcached？
+php又帮nginx把内容存储到哪个memcached？
+回调的php，有把信息写在哪儿？
+最终问题：多态memcached，nginx与php，如何保持集群上的算法同步.
+
+- 要有稳定集群算法
+- nginx与php对于memcached的算法要同步
+
+解决：
+nginx hash($uri) --> 某台memcached
+php hash($uri) --> 同一台memcached
+需要一个hash规则
+这样才能保证分布式的数据同步。
+默认的nginx分布式是通过计数器来轮流请求，需要第三方模块和一致性哈希应用
+
+# 第3方模块编译
+
+第3方模块编译和一致性哈希应用
+
+
+> 编译第三方模块   
+
+下载模块，然后重新指定nginx编译参数  
+
+```
+./configure --prefix=/usr/local/nginx --add-module=/usr/local/src/ngx_http_consistent/hash/
+make && make install
+```
+
+
+> 安装模块后
+
+```
+upstream memserver {
+	consistent_hash $requrest_uri;
+	#server localhost:11211;
+	#server localhost:11212;
+	#server localhost:11213;
+	server 192.168.1.100:11211;
+	server 192.168.1.100:11212;
+	server 192.168.1.100:11213;
+}
+
+server {
+	listent 80;
+	server_name localhost;
+	location / {
+		set $memcached_key $request_uri;
+		memcached_pass memserver;
+		error_page 404 /callback.php;
+	}
+}
+```
+
+在php.ini中修改默认hash取模的策略
+```
+memcache.hash_strategy=consistent
+```
+
+php代码
+
+```
+<?php
+// 添加多台服务器, // php要添加和nginx一样 的服务器
+
+$mem = new memcache();
+// $mem->addServer('localhost', 11211);
+// $mem->addServer('localhost', 11212);
+// $mem->addServer('localhost', 11213);
+
+$mem->addServer('192.168.1.100', 11211);
+$mem->addServer('192.168.1.100', 11212);
+$mem->addServer('192.168.1.100', 11213);
+```
+
+注意：
+在 upstream做负载均衡时，要用IP或远程主机名，不能使用localhsot
+
+# 大访问量优化
+
+大访问量优化整体思路
+
+高性能的服务器的架设
+
+网站的请求量是绝对的，很难降下来。
+
+对于高性能网站，请求量大，如何支撑？
+- 要减少请求
+	对于开发人员 -- 合并css，背景图片，压缩文件，减少mysql查询
+- nginx的expiress，利用浏览器缓存等，减少查询
+- 利用cdn来响应请求
+- 最终剩下来的，不可避免的请求 -- 服务器集群 + 负载均衡来支撑
+
+> 如何响应高并发请求
+
+既然响应是不可避免的，要做的是把工作内容“平均”分给每台服务器，最理想的状态：每台服务器的性能都被充分利用。
+
+服务器讲究:
+像存储数据的，cpu不一定要强，但是硬盘一定要好，安装了ssd固态硬盘。
+有的计算复杂的，cpu要高服务器
+有的计算不复杂，但是进程多，内存多的服务器
+
+服务器分清：计算密集，IO密集，进程密集。
+
+> nginx观察统计模块
+
+```
+./configure --prefix=/usr/local/nginx/ --add-module=/usr/local/ngx_http_consistent_hash_master --with-http_stub_status_module
+make && make install
+```
+
+修改nginx.conf,配置统计模块参数
+```
+location /status {
+	stub_status on;
+	access_log off;
+	allow 192.168.1.100;
+	deny all;
+}
+```
+
+`ab工具`压力测试，观察数据
+
+
+> 优化思路
+
+对于nginx 来说，nginx请求，来响应。访问，mysql或硬盘中的.html文件等等
+
+1. 建立socket连接
+2. 打开文件，并沿socket返回
+
+
+建立`socket`连接能否很多，打开文件是否能够打开很多。
+
+
+socket中处理的包括：`系统层面`和`nginx`
+系统层面：
+```
+最大连接数 somaxconn
+洪水攻击 // 不做洪水抵御 
+加快tcp连接回收 recycle
+空的tcp是否允许回收利用 reuse
+```
+-----
+```
+echo 50000 > /proc/sys/net/core/somaxconn
+echo 1 > /proc/sys/net/ipv4/tcp_tw_recycle
+echo 1 > /proc/sys/net/ipv4/tcp_tw_reuse
+
+echo 0 > /proc/sys/net/ipve4/tcp_syncookies
+```
+nginx：
+```
+ // 每个子进程打开的连接（worker_connections）
+evnets {
+	worker_connnections 10240;
+}
+//  http连接关闭 
+http {
+    keepalive_timeout 0;
+}
+```
+
+文件中处理的包括：`系统层面`和`nginx`
+系统层面的限制：
+```
+ulimit -n 50000 // 设置一个比较大的值
+```
+nginx：
+```
+// 子进程允许打开的文件（worker_limit_onfile）
+// nginx配置文件中的全局区修改
+worker_limit_nofile 10000;
+```
+
+响应头中:`Connection: keep-alive`
+防止频繁的tcp,还保持时间的话，就浪费
+```
+http {
+    keepalive_timeout 0;
+}
+```
+时间修改为0之后，`Connection: close`
+
